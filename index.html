@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>M3U Editor MR.ROBOT</title>
+    <style>
+        /* Same styles as before, with minor updates for additional column */
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f5f5f5;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 100%;
+            margin: 20px auto;
+            padding: 10px;
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #3498db;
+            margin-bottom: 20px;
+        }
+        .file-buttons {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+        .file-buttons button {
+            flex: 1;
+            margin: 0 5px;
+            padding: 10px 20px;
+            font-size: 16px;
+            border: none;
+            border-radius: 5px;
+            color: #fff;
+            background-color: #3498db;
+            cursor: pointer;
+        }
+        .file-buttons button:hover {
+            background-color: #2980b9;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+            overflow-x: auto;
+        }
+        table thead {
+            background-color: #3498db;
+            color: white;
+        }
+        table th, table td {
+            padding: 10px;
+            border: 1px solid #d3d3d3;
+            text-align: left;
+            min-width: 100px;
+            max-width: 300px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        table tbody tr:hover {
+            background-color: #f1f1f1;
+        }
+        .form-group {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .form-group input {
+            padding: 8px;
+            font-size: 14px;
+            border: 1px solid #d3d3d3;
+            border-radius: 4px;
+        }
+        .form-buttons {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+        }
+        .form-buttons button {
+            flex: 1;
+            padding: 10px;
+            font-size: 16px;
+            border: none;
+            border-radius: 5px;
+            color: #fff;
+            background-color: #3498db;
+            cursor: pointer;
+        }
+        .form-buttons button:hover {
+            background-color: #2980b9;
+        }
+        .editable {
+            cursor: pointer;
+        }
+        .editable:hover {
+            background-color: #f0f0f0;
+        }
+        td[contenteditable="true"] {
+            background-color: #fff;
+            border: 2px solid #3498db;
+            padding: 5px;
+        }
+        tr.selected {
+            background-color: #e8f4f8;
+        }
+        #fileInput {
+            display: none;
+        }
+
+        /* Responsive styles */
+        @media (max-width: 768px) {
+            .container {
+                margin: 10px;
+                padding: 5px;
+            }
+            .form-group {
+                grid-template-columns: 1fr;
+            }
+            table {
+                display: block;
+                overflow-x: auto;
+            }
+            table th, table td {
+                min-width: 120px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>M3U Editor MR.ROBOT</h1>
+        <div class="file-buttons">
+            <input type="file" id="fileInput" accept=".m3u,.m3u8">
+            <button id="loadFile">Load File</button>
+            <button id="saveFile">Save File</button>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>TVG ID</th>
+                    <th>TVG Name</th>
+                    <th>Logo</th>
+                    <th>Group</th>
+                    <th>Channel Name</th>
+                    <th>URL</th>
+                    <th>Referrer</th>
+                </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+        </table>
+
+        <div class="form-group">
+            <input type="text" id="tvgId" placeholder="TVG ID">
+            <input type="text" id="tvgName" placeholder="TVG Name">
+            <input type="text" id="logo" placeholder="Logo">
+            <input type="text" id="group" placeholder="Group">
+            <input type="text" id="channelName" placeholder="Channel Name">
+            <input type="text" id="url" placeholder="URL">
+            <input type="text" id="referrer" placeholder="Referrer">
+        </div>
+        <div class="form-buttons">
+            <button id="addEntry">Add Entry</button>
+            <button id="removeSelected">Remove Selected</button>
+        </div>
+    </div>
+
+    <script>
+        const tableBody = document.getElementById('tableBody');
+        const tvgIdInput = document.getElementById('tvgId');
+        const tvgNameInput = document.getElementById('tvgName');
+        const logoInput = document.getElementById('logo');
+        const groupInput = document.getElementById('group');
+        const channelNameInput = document.getElementById('channelName');
+        const urlInput = document.getElementById('url');
+        const referrerInput = document.getElementById('referrer');
+        const fileInput = document.getElementById('fileInput');
+
+        document.getElementById('loadFile').addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const content = e.target.result;
+                    parseM3UContent(content);
+                };
+                reader.readAsText(file);
+            }
+        });
+
+        function parseM3UContent(content) {
+            tableBody.innerHTML = '';
+            const lines = content.split('\n');
+            let currentEntry = {};
+
+            for (let i = 0; i < lines.length; i++) {
+                let line = lines[i].trim();
+                if (line.startsWith('#EXTINF:')) {
+                    let channelName = line.split(',').pop().trim();
+                    let tvgId = line.match(/tvg-id="([^"]*)"/);
+                    let tvgName = line.match(/tvg-name="([^"]*)"/);
+                    let tvgLogo = line.match(/tvg-logo="([^"]*)"/);
+                    let groupTitle = line.match(/group-title="([^"]*)"/);
+
+                    currentEntry = {
+                        tvgId: tvgId ? tvgId[1] : '',
+                        tvgName: tvgName ? tvgName[1] : '',
+                        logo: tvgLogo ? tvgLogo[1] : '',
+                        group: groupTitle ? groupTitle[1] : '',
+                        channelName: channelName || '',
+                        referrer: ''
+                    };
+                } else if (line.startsWith('#EXTVLCOPT:http-referrer=')) {
+                    currentEntry.referrer = line.split('=').pop().trim();
+                } else if (line.startsWith('http')) {
+                    currentEntry.url = line;
+                    addEntryToUI(currentEntry);
+                    currentEntry = {};
+                }
+            }
+        }
+
+        function addEntryToUI(entry) {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td class="editable" contenteditable="true">${entry.tvgId}</td>
+                <td class="editable" contenteditable="true">${entry.tvgName}</td>
+                <td class="editable" contenteditable="true">${entry.logo}</td>
+                <td class="editable" contenteditable="true">${entry.group}</td>
+                <td class="editable" contenteditable="true">${entry.channelName}</td>
+                <td class="editable" contenteditable="true">${entry.url}</td>
+                <td class="editable" contenteditable="true">${entry.referrer}</td>
+            `;
+            tableBody.appendChild(row);
+        }
+
+        document.getElementById('saveFile').addEventListener('click', () => {
+            const m3uContent = generateM3UContent();
+            const blob = new Blob([m3uContent], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'playlist.m3u';
+            a.click();
+            URL.revokeObjectURL(url);
+        });
+
+        function generateM3UContent() {
+            let content = '#EXTM3U\n';
+            Array.from(tableBody.children).forEach((row) => {
+                const cells = row.children;
+                const tvgId = cells[0].innerText.trim();
+                const tvgName = cells[1].innerText.trim();
+                const logo = cells[2].innerText.trim();
+                const group = cells[3].innerText.trim();
+                const channelName = cells[4].innerText.trim();
+                const url = cells[5].innerText.trim();
+                const referrer = cells[6].innerText.trim();
+
+                content += `#EXTINF:-1 tvg-id="${tvgId}" tvg-name="${tvgName}" tvg-logo="${logo}" group-title="${group}",${channelName}\n`;
+                if (referrer) {
+                    content += `#EXTVLCOPT:http-referrer=${referrer}\n`;
+                }
+                content += `${url}\n`;
+            });
+            return content;
+        }
+
+        document.getElementById('addEntry').addEventListener('click', () => {
+            const entry = {
+                tvgId: tvgIdInput.value,
+                tvgName: tvgNameInput.value,
+                logo: logoInput.value,
+                group: groupInput.value,
+                channelName: channelNameInput.value,
+                url: urlInput.value,
+                referrer: referrerInput.value
+            };
+            addEntryToUI(entry);
+            tvgIdInput.value = '';
+            tvgNameInput.value = '';
+            logoInput.value = '';
+            groupInput.value = '';
+            channelNameInput.value = '';
+            urlInput.value = '';
+            referrerInput.value = '';
+        });
+
+        document.getElementById('removeSelected').addEventListener('click', () => {
+            const rows = Array.from(tableBody.children);
+            rows.forEach((row) => {
+                if (row.classList.contains('selected')) {
+                    row.remove();
+                }
+            });
+        });
+
+        tableBody.addEventListener('click', (e) => {
+            const row = e.target.parentElement;
+            if (row.tagName === 'TR') {
+                row.classList.toggle('selected');
+            }
+        });
+    </script>
+</body>
+</html>
